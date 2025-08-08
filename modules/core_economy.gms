@@ -38,6 +38,7 @@ $setglobal default_savings "fixed"
 *| PPP | MER |
 $setglobal exchange_rate 'PPP'
 
+$setglobal tmax_minus_10 '48'
 
 ## SETS
 #_________________________________________________________________________
@@ -225,7 +226,6 @@ $if set mod_natural_capital      (sum(nn, natural_capital_aggregate(nn,'nN'))**n
 );
 tfp(t,n)$tlast(t) = sum(tt$pre(tt,t), tfp(tt,n));
 
-tolerance("Y") = 1e-3; #0.1% of variation of economy
 
 ##  DECLARE VARIABLES
 #_________________________________________________________________________
@@ -295,8 +295,8 @@ $else.sav
   S.lo(t,n) = 0.1;
   S.up(t,n) = 0.45;
   #allow only gradual adjustment over time from starting point
-  S.lo(t,n) = s0('savings_rate', '1', n) + (S.lo('58',n) - s0('savings_rate', '1', n)) * (tperiod(t) - 1)/(smax(tt,tperiod(tt)) - 1);
-  S.up(t,n) = s0('savings_rate', '1', n) + (S.up('58',n) - s0('savings_rate', '1', n)) * (tperiod(t) - 1)/(smax(tt,tperiod(tt)) - 1);
+  #S.lo(t,n) = s0('savings_rate', '1', n) + (S.lo('58',n) - s0('savings_rate', '1', n)) * (tperiod(t) - 1)/(smax(tt,tperiod(tt)) - 1);
+  #S.up(t,n) = s0('savings_rate', '1', n) + (S.up('58',n) - s0('savings_rate', '1', n)) * (tperiod(t) - 1)/(smax(tt,tperiod(tt)) - 1);
 * Fix starting point
   S.fx(tfirst,n) = s0('savings_rate', '1', n);
 $endif.sav
@@ -319,7 +319,7 @@ $elseif.ph %phase%=='eql'
 
     eq_s          # Savings rate equation
     eq_ri         # Interest rate equation
-    eq_kk         # Capital balance equation
+$if not set mod_banks    eq_kk         # Capital balance equation
 
 ##  EQUATIONS
 #_________________________________________________________________________
@@ -332,12 +332,21 @@ $if set mod_natural_capital                  GLOBAL_NN(t,n) ** natural_capital_g
                                             (pop(t,n)/1000)**prodshare('labour',n)]
 ;
 
+$ifthen.banks not set mod_banks
 * GDP net of Climate Damages
 $ifthen.dam set damages_postprocessed
 eq_ynet(t,n)$(reg(n))..  YNET(t,n)  =E=  YGROSS(t,n) - DAMAGES.l(t,n)  ;
 $else.dam
 eq_ynet(t,n)$(reg(n))..  YNET(t,n)  =E=  YGROSS(t,n) - DAMAGES(t,n)  ;
 $endif.dam
+$elseif.banks set mod_banks
+eq_ynet(tm1,t,n)$(reg(n) and pre(tm1,t) and tperiod(t) gt 1).. 
+                          YNET(t,n)  =E= {    (RI(tm1,n)+1) * I(tm1,n)
+                                              + WAGE(t,n) * (pop(t,n)/1000)
+                                              + HANDOUTS(t,n) + FIRM_PROFITS(t,n) + BANK_DIVIDENDS(t,n)
+                                          } * (1-DAMFRAC(t,n))
+;
+$endif.banks
 
 * GDP net of both Damages and Abatecosts
  eq_yy(t,n)$(reg(n))..   Y(t,n)  =E=  YNET(t,n)
@@ -347,9 +356,9 @@ $endif.dam
                                   -   ABCOSTLAND(t,n)
                                       # Carbon Tax [Trill USD / Gtspecies]
                                   -   sum(ghg, ctax_corrected(t,n,ghg) * convy_ghg(ghg) * (E(t,n,ghg) - E.l(t,n,ghg)) )
-                                       # Cost of stratospheric aerosol injection
-$if set mod_sai                   -    COST_SAI(t,n)
-                                       # Cost of carbon dioxide removal
+                                       # Cost of SRM Geoengineering
+$if set mod_srm                   -    SRM_COST(t,n)
+
 $if set mod_dac                   -    COST_CDR(t,n)
 ;
 
@@ -366,8 +375,10 @@ $if set mod_natural_capital           - sum(type, NAT_INV(type,t,n))
 * Consumption pro-capite (in thousands USD)
  eq_cpc(t,n)$(reg(n))..   CPC(t,n)  =E=  C(t,n) / pop(t,n) * 1e6 ;
 
+$ifthen.banks not set mod_banks
 * Capital according to depreciation and investments
  eq_kk(t,tp1,n)$(reg(n) and pre(t,tp1))..   K(tp1,n)  =E=  (1-dk)**tstep * K(t,n) + tstep * I(t,n)   ;
+$endif.banks
 
 * Interest rate
  eq_ri(t,tp1,n)$(reg(n) and pre(t,tp1))..   RI(t,n)  =E=  ( (1+prstp) * (CPC(tp1,n)/CPC(t,n))**(elasmu/tstep) ) - 1  ;
@@ -383,7 +394,7 @@ $elseif.ph %phase%=='before_solve'
 
 $ifthen.sav  %savings%=='flexible'
 * Last ten periods keep saving rate constant to avoid terminal problems
-  S.fx(t,n)$(tperiod(t) gt (smax(tt,tperiod(tt)) - 10) )  = S.l('48',n);
+  S.fx(t,n)$(tperiod(t) gt (smax(tt,tperiod(tt)) - 10) )  = S.l('%tmax_minus_10%',n);
 $endif.sav
 
 ##  AFTER SOLVE
@@ -398,7 +409,6 @@ $elseif.ph %phase%=='after_solve'
  world_avg_s(t)        = sum(n$( nsolve(n)),      S.l(t,n))/card(nsolve);
 
 viter(iter,'S',t,n)$nsolve(n)   = S.l(t,n);    # Keep track of last investment values
-viter(iter,'Y',t,n)$nsolve(n)   = Y.l(t,n)/ykali(t,n);    # Keep track of last gdp values
 
 #===============================================================================
 *     ///////////////////////     REPORTING     ///////////////////////
@@ -413,7 +423,7 @@ Parameter
     scc(t,n,ghg)           'Social Cost of Carbon' 
 ;
 * Evaluate social cost of carbon per region through marginals as in DICE
-scc(t,n,ghg)$(nsolve(n) and year(t) le 2200 and eq_cc.l(t,n) gt 0) = -1e3*sum(nn$nsolve(nn), div0(eq_e.m(t,nn,ghg) , eq_cc.m(t,nn)) );
+scc(t,n,ghg)$(nsolve(n) and year(t) le 2200) = -1e3*sum(nn$nsolve(nn), div0(eq_e.m(t,nn,ghg) , eq_cc.m(t,nn)) );
 
 # WORLD DAMAGES ----------------------------------------
 PARAMETERS
