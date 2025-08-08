@@ -40,12 +40,21 @@ $elseif.ph %phase%=='include_data'
 
 
 Scalars
-    bankkappa  'Bank leverage ratio'            / 5     /
-    bankgamma  'Bank share of profits'          / 0.9   /
-    invadjcost 'Investment adjustment costl'    / 0     /
+    bankkappa  'Bank leverage ratio'            / 8     /
+    bankgamma  'Bank share of profits'          / 0.95   /
+    invadjcost 'Investment adjustment costl'    / 2     /
     ri_kali    'Real interest rate value for calibration' / 0.015 /
 ;
 
+
+Parameters # for tfp recalibration
+        securities_tfp(t,n) 'Securities TFP'
+        networth_tfp(t,n) 'Net worth TFP'
+        securities_price_tfp(t,n) 'Securities price TFP'
+        rk_tfp(t,n) 'Return to capital TFP'
+        ri_tfp(t,n) 'Real interest rate TFP'
+        cpc_tfp(t,n) 'Consumption per capita TFP'
+;
 
 
 ##  COMPUTE DATA
@@ -84,10 +93,15 @@ VARIABLES
 ;
 
 FIRM_PROFITS.l(t,n) = 0 ;
-RK.l(t,n) = prodshare('capital',n)*ykali(t,n)/k_tfp(t,n)  + (1-dk);
-SECURITIES_PRICE.l(t,n) = 1 / [ 1 - invadjcost*(i_tfp(t,n)/k_tfp(t,n) - dk) ] ;
-NETWORTH.l(t,n) = bankgamma * [RK.l(t,n)*SECURITIES_PRICE.l(t,n)*k_tfp(t,n) - (ri_kali+1)*i_tfp(t,n) ] ; 
-BANK_DIVIDENDS.l(t,n) = (1-bankgamma) * [RK.l(t,n)*SECURITIES_PRICE.l(t,n)*k_tfp(t,n) - (ri_kali+1)*i_tfp(t,n) ] ;
+#RK.l(t,n) = prodshare('capital',n)*ykali(t,n)/k_tfp(t,n)  + (1-dk);
+#SECURITIES_PRICE.l(t,n) = 1 / [ 1 - invadjcost*(i_tfp(t,n)/k_tfp(t,n) - dk) ] ;
+#NETWORTH.l(t,n) = bankgamma * [RK.l(t,n)*SECURITIES_PRICE.l(t,n)*k_tfp(t,n) - (ri_kali+1)*i_tfp(t,n) ] ; 
+#BANK_DIVIDENDS.l(t,n) = (1-bankgamma) * [RK.l(t,n)*SECURITIES_PRICE.l(t,n)*k_tfp(t,n) - (ri_kali+1)*i_tfp(t,n) ] ;
+
+RK.l(t,n) = rk_tfp(t,n);
+SECURITIES_PRICE.l(t,n) = securities_price_tfp(t,n) ;
+NETWORTH.l(t,n) = networth_tfp(t,n) ; 
+BANK_DIVIDENDS.l(t,n) = networth_tfp(t,n) / bankgamma * (1-bankgamma) ;
 
 
 
@@ -105,8 +119,12 @@ YNET.fx(tfirst,n) = ykali(tfirst,n) ;
 FIRM_PROFITS.fx(tfirst,n) = FIRM_PROFITS.l(tfirst,n) ;
 RK.fx(tfirst,n) = RK.l(tfirst,n) ;
 SECURITIES_PRICE.fx(tfirst,n) = SECURITIES_PRICE.l(tfirst,n) ;
-NETWORTH.fx(tfirst,n) = NETWORTH.l(tfirst,n) ;
+NETWORTH.fx(tfirst,n) = NETWORTH.l(tfirst,n);
 BANK_DIVIDENDS.fx(tfirst,n) = BANK_DIVIDENDS.l(tfirst,n) ;
+
+RI.up(t,n) = 0.05 ;
+RI.lo(t,n) = 1e-3 ;
+SECURITIES_PRICE.lo(t,n) = 1e-3 ;
 
 
 #=========================================================================
@@ -187,7 +205,7 @@ eq_bankdf(t,tp1,n)$(reg(n) and pre(t,tp1))..
         BANK_DF(t,n) =E= {1/[RI(t,n)+1]} * [1 - bankgamma + bankgamma*BANK_SHADOWVALUE(tp1,n)] ;
 *Eq. (12)
 eq_bankshadowvalue(t,tp1,n)$(reg(n) and pre(t,tp1))..   
-        BANK_SHADOWVALUE(t,n) =E= [ BANK_LAMBDA(t,n) * SECURITIES(t,n)*SECURITIES_PRICE(t,n) ]
+        BANK_SHADOWVALUE(tp1,n) =E= [ BANK_LAMBDA(t,n) * SECURITIES(t,n)*SECURITIES_PRICE(t,n) ]
                                         /  [ bankkappa * NETWORTH(t,n) ]
                                         + BANK_DF(tp1,n)*(RI(t,n)+1) ;
 

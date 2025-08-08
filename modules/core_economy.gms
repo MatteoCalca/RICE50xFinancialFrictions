@@ -204,6 +204,7 @@ optlr_savings(n) = (dk + .004)/(dk + .004*elasmu + prstp)*prodshare('capital',n)
 * Linear interpolation: S0 + (Send - S0)*(t - t0)/(tend - t0)
 fixed_savings(t,n) = s0('savings_rate', '1', n) + (optlr_savings(n) - s0('savings_rate', '1', n)) * (tperiod(t) - 1)/(smax(tt,tperiod(tt)) - 1);
 
+fixed_savings(t,'usa') = 0.05;
 
 ##  DYNAMIC CALIBRATION OF TFP FROM BASELINE AND SCENARIO ---------------------
 * set capital first value
@@ -214,7 +215,17 @@ loop((t,tp1)$pre(t,tp1),
    # Investments
    i_tfp(t,n)  =  fixed_savings(t,n)  * ykali(t,n)   ;
    # Capital
+$ifthen.banks not set mod_banks
    k_tfp(tp1,n)  =  ((1-dk)**tstep) * k_tfp(t,n)  +  tstep * i_tfp(t,n)  ;
+$elseif.banks set mod_banks
+    cpc_tfp(t,n) = [ykali(t,n) - i_tfp(t,n)] / (pop(t,n)/1000);
+    ri_tfp(t,n) = (1+prstp)*(cpc_tfp(tp1,n)/cpc_tfp(t,n))**(elasmu/tstep) - 1;
+    securities_price_tfp(t,n) = 1 / [ 1 - invadjcost*(i_tfp(t,n)/k_tfp(t,n) - dk) ] ;
+    rk_tfp(t,n) = prodshare('capital',n)*ykali(t,n)/k_tfp(t,n)  + (1-dk)*securities_price_tfp(t,n);
+    networth_tfp(t,n) = bankgamma * [rk_tfp(t,n)*k_tfp(t,n) - (ri_tfp(t-1,n)+1)*i_tfp(t-1,n) ] ;
+    securities_tfp(t,n) = (i_tfp(t,n) + networth_tfp(t,n)) * securities_price_tfp(t,n);
+    k_tfp(tp1,n) = securities_tfp(t,n) ;
+$endif.banks
    # TFP of current scenario (explicited from Cobb-Douglas prod. function)
    tfp(t,n)  =  ykali(t,n) / {
                                  ( pop(t,n)/1000
@@ -292,13 +303,13 @@ $ifthen.sav  %savings%=='fixed'
   S.fx(t,n) = fixed_savings(t,n)  ;
 $else.sav
 * Savings are left free to be optimized
-  S.lo(t,n) = 0.1;
+  S.lo(t,n) = 0.05;
   S.up(t,n) = 0.45;
   #allow only gradual adjustment over time from starting point
   #S.lo(t,n) = s0('savings_rate', '1', n) + (S.lo('58',n) - s0('savings_rate', '1', n)) * (tperiod(t) - 1)/(smax(tt,tperiod(tt)) - 1);
   #S.up(t,n) = s0('savings_rate', '1', n) + (S.up('58',n) - s0('savings_rate', '1', n)) * (tperiod(t) - 1)/(smax(tt,tperiod(tt)) - 1);
 * Fix starting point
-  S.fx(tfirst,n) = s0('savings_rate', '1', n);
+  #S.fx(tfirst,n) = s0('savings_rate', '1', n);
 $endif.sav
 
 
