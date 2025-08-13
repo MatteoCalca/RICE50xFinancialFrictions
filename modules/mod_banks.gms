@@ -90,6 +90,9 @@ VARIABLES
     BANK_LAMBDA(t,n)       'Lagrange multiplier on the bank leverage constraint (lambda)'
     BANK_DF(t,n)           'Discount factor of banks (Theta)'
     BANK_DIVIDENDS(t,n)    'Dividends of banks to households (Xi)'
+
+    FIRM_I(t,n)         'Investment of firms'
+    FIRM_S(t,n)         'Investment rate of firms'
 ;
 
 FIRM_PROFITS.l(t,n) = 0 ;
@@ -118,13 +121,16 @@ $elseif.ph %phase%=='compute_vars'
 YNET.fx(tfirst,n) = ykali(tfirst,n) ;
 FIRM_PROFITS.fx(tfirst,n) = FIRM_PROFITS.l(tfirst,n) ;
 RK.fx(tfirst,n) = RK.l(tfirst,n) ;
-SECURITIES_PRICE.fx(tfirst,n) = SECURITIES_PRICE.l(tfirst,n) ;
+#SECURITIES_PRICE.fx(tfirst,n) = SECURITIES_PRICE.l(tfirst,n) ;
 NETWORTH.fx(tfirst,n) = NETWORTH.l(tfirst,n);
 BANK_DIVIDENDS.fx(tfirst,n) = BANK_DIVIDENDS.l(tfirst,n) ;
 
 RI.up(t,n) = 0.05 ;
 RI.lo(t,n) = 1e-3 ;
 SECURITIES_PRICE.lo(t,n) = 1e-3 ;
+
+FIRM_S.lo(t,n) = 0.05 ;
+FIRM_S.up(t,n) = 1 ;
 
 
 #=========================================================================
@@ -153,6 +159,8 @@ eq_banknetworth # Eq. (14)
 eq_bankdividends
 eq_securities
 eq_kfirmFOC # Eq. (26)
+eq_kaccumulation # Eq. (25)
+eq_firmI
 
 
 ##  EQUATIONS
@@ -216,8 +224,13 @@ eq_bankdividends(t,tp1,n)$(reg(n) and pre(t,tp1))..
 
 ##### CAPITAL PRODUCERS --------------------------------------------
 * Eq. (26)
-eq_kfirmFOC(t,n)$(reg(n))..   SECURITIES_PRICE(t,n) =E= 1 / { 1 - invadjcost*[I(t,n)/K(t,n) - dk] } ; # invadjcost most likely around 1.5 or 2, start with 0
+eq_kfirmFOC(t,n)$(reg(n))..   SECURITIES_PRICE(t,n) =E= 1 / { 1 - invadjcost*[FIRM_I(t,n)/K(t,n) - dk] } ; # invadjcost most likely around 1.5 or 2, start with 0
 
+eq_kaccumulation(t,tp1,n)$(reg(n) and pre(t,tp1))..  
+        K(tp1,n) =E= (1-dk)*K(t,n) + FIRM_I(t,n) - (invadjcost/2)*power(FIRM_I(t,n)/K(t,n) - dk,2)*K(t,n) ;
+
+eq_firmI(t,n)$(reg(n))..  
+        FIRM_I(t,n) =E= FIRM_S(t,n) * YGROSS(t,n) ;
 
 
 ##### GOVERNMENT ---------------------------------------------------
