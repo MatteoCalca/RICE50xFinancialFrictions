@@ -431,7 +431,7 @@ $elseif.ph %phase%=='report'
 
 * Social Cost of Carbon
 Parameter
-    scc(t,n,ghg)           'Social Cost of Carbon' 
+    scc(t,n,ghg)           'Standard DICE Social Cost of Carbon' 
 ;
 * Evaluate social cost of carbon per region through marginals as in DICE
 scc(t,n,ghg)$(nsolve(n) and year(t) le 2200) = -1e3*sum(nn$nsolve(nn), div0(eq_e.m(t,nn,ghg) , eq_cc.m(t,nn)) );
