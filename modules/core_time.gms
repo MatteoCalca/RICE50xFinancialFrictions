@@ -13,6 +13,7 @@
 $ifthen.ph %phase%=='conf'
 
 $setglobal tfix 1
+$setglobal tstep 5
 
 * Value in a specific year (use tt instead of t, not working in equations)
 $ifthen.x not set stochastic 
@@ -30,6 +31,8 @@ SETS
     tlast(t)    'Last time period nodes'
     t5last(t)   'Last 5 time period nodes'
     tnolast(t)  'All nodes except the last time period nodes'
+    t50ylast(t) 'Last 50 years'
+    t_in_tstep(t)'Implicit time steps in tstep'
 ;
 alias(t,tt,ttt,tp1,tp2,tm1,tm2);
 
@@ -39,7 +42,7 @@ PARAMETER tperiod(t)  'Time period'                                    ;
 PARAMETER year(t)     'Reference year for period t'                    ;
 PARAMETER begyear(t)  'Beginning year for period t'                    ;
 PARAMETER tlen(t)     'Length of time period [years]'                  ;
-SCALAR    tstep       'Length of each time step [years]'       / 5 /   ;
+SCALAR    tstep       'Length of each time step [years]'               ;
 
 $include %datapath%/time.inc
 
@@ -50,6 +53,9 @@ tlast(t) = yes$(tperiod(t) eq smax(tt,tperiod(tt)));
 t5last(t) = yes$(tperiod(t) gt smax(tt,tperiod(tt)) - 5);
 tnofirst(t) = yes$(not tfirst(t));
 tnolast(t)  = yes$(not tlast(t));
+tstep = sum(t, tlen(t))/sum(t,1);
+t50ylast(t) = yes$(tperiod(t) gt smax(tt,tperiod(tt)) - 50/tstep);
+t_in_tstep(t) = yes$(t.val le tstep);
 
 * Fixed period nodes
 set tfix(t)    'fixed period nodes';
@@ -114,6 +120,7 @@ $elseif.ph %phase%=='gdx_items'
 # Sets (excl. aliases) ---------------------------------
 t
 tstep
+t_in_tstep
 tfix
 tlen
 pre

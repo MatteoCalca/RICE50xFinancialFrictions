@@ -52,7 +52,6 @@ SET
 
 set prodfact /labour,capital/;
 
-
 ## INCLUDE DATA
 #_________________________________________________________________________
 $elseif.ph %phase%=='include_data'
@@ -60,7 +59,7 @@ $elseif.ph %phase%=='include_data'
 
 PARAMETERS
 * Population and technology
-    dk              'Depreciation rate on capital (per year)'         /  0.100     /
+    #dk              'Depreciation rate on capital (per year)'         /  0.100     /
     prodshare(prodfact, n) 'production elasticity in the Cobb-Douglas function'
 
 * Savings Rate
@@ -141,10 +140,11 @@ PARAMETERS
     s0(*,t,n)      'Regions Savings Rate at starting time [%GDP]'
     k0(*,t,n)      'Initial Regions Capital at starting time [Trill 2005 USD]'
     r0(*,t,n)      'Regions Interest Rate at starting time [%]'
+    dk(n)          'Depreciation rate on capital (per year)' 
 ;
 
 $gdxin '%datapath%data_validation.gdx'
-$load k0=k_valid_article, s0=socecon_valid_weo_mean, r0=socecon_valid_wdi_mean
+$load k0=k_valid_pwt, s0=socecon_valid_weo_mean, r0=socecon_valid_wdi_mean dk=depreciation_valid_pwt
 $gdxin
 $if %exchange_rate%=="PPP" k0('fg',t,n) = k0('fg',t,n)*mer2ppp(t,n);
 *for regions with missing capital, impute based on estimated linar relationship with GDP (R squared = 0.9604)
@@ -168,8 +168,13 @@ PARAMETER
    tfp(t,n)           'Regions Total Factor Productivity'
    i_tfp(t,n)         'Baselines Investments to evaluate TFP'
    k_tfp(t,n)         'Baselines Capital to evaluate TFP'
+   dkI(n)             'Compound depreciation rate on investment for capital accumulation'
 ;
 
+dkI(n) = sum(t_in_tstep,(1-dk(n))**(t_in_tstep.val-1)) ;
+
+PARAMETER min_savings0(n) 'Minimum savings rate to keep calibration capital stock constant [%GDP]';
+min_savings0(n) = [(1-(1-dk(n))**tstep) * k0('fg', '1', n)]/[dkI(n) * ykali('1', n)] ;
 
 ##  COMPUTE DATA
 #_________________________________________________________________________
@@ -179,7 +184,7 @@ prodshare('labour', n) = 0.7; #original RICE/DICE value
 $ifthen.cs set calib_labour_share
 * now calibrate capital and labour shares of GDP based on wage share in GDP indirectly based on gross capital productivity
 parameter wage0(n) 'USD per capita per year';
-wage0(n) = (ykali('1',n) - (r0('interest_rate', '1', n) + dk) * k0('fg', '1', n)) / pop('1',n) * 1e6;
+wage0(n) = (ykali('1',n) - (r0('interest_rate', '1', n) + dk(n)) * k0('fg', '1', n)) / pop('1',n) * 1e6;
 *wage at least to be one third of GDP per capita
 wage0(n) = max(wage0(n), (1/3)*gdppc_kali('1',n));
 prodshare('labour', n) = (wage0(n) * pop('1',n) * 1e-6) / ykali('1',n);
@@ -197,10 +202,11 @@ basegrowthcap(t,n) = ((( (ykali(tp1,n)/pop(tp1,n)) / (ykali(t,n)/pop(t,n)) )**(1
 
 ##  SAVINGS RATE --------
 * Optimal long-run Savings rate
-optlr_savings(n) = (dk + .004)/(dk + .004*elasmu + prstp)*prodshare('capital',n);
+optlr_savings(n) = (dk(n) + .004)/(dk(n) + .004*elasmu + prstp)*prodshare('capital',n);
 
 * Evaluate converging Savings Rate
 * Linear interpolation: S0 + (Send - S0)*(t - t0)/(tend - t0)
+s0('savings_rate', '1', n) = min(max(s0('savings_rate', '1', n), min_savings0(n)), 0.45); #ensure savings at least to keep capital steady, unless higher than 45% (max observed rate and S.up)
 fixed_savings(t,n) = s0('savings_rate', '1', n) + (optlr_savings(n) - s0('savings_rate', '1', n)) * (tperiod(t) - 1)/(smax(tt,tperiod(tt)) - 1);
 
 
@@ -209,11 +215,16 @@ fixed_savings(t,n) = s0('savings_rate', '1', n) + (optlr_savings(n) - s0('saving
 k_tfp('1',n)  =  k0('fg', '1', n);
 
 * retrieve tfp from reverting the Cobb-Douglas Production Function based on fixed investment rates iteratively
-loop((t,tp1)$pre(t,tp1),
    # Investments
-   i_tfp(t,n)  =  fixed_savings(t,n)  * ykali(t,n)   ;
+$ifthen.sav  %savings%=='fixed'
+   i_tfp(t,n)  =  fixed_savings(t,n)  * ykali(t,n)   ; # use fixed savings for calibration of fixed savings
+$else.sav
+   i_tfp(t,n)  =  optlr_savings(n)  * ykali(t,n)   ; # use optimal savings for calibration of flexible savings
+$endif.sav
    # Capital
-   k_tfp(tp1,n)  =  ((1-dk)**tstep) * k_tfp(t,n)  +  tstep * i_tfp(t,n)  ;
+loop((t,tp1)$pre(t,tp1),
+   k_tfp(tp1,n)  =  ((1-dk(n))**tstep) * k_tfp(t,n)  +  dkI(n) * i_tfp(t,n)  ;
+);
    # TFP of current scenario (explicited from Cobb-Douglas prod. function)
    tfp(t,n)  =  ykali(t,n) / {
                                  ( pop(t,n)/1000
@@ -222,7 +233,6 @@ loop((t,tp1)$pre(t,tp1),
 $if set mod_natural_capital      (sum(nn, natural_capital_aggregate(nn,'nN'))**natural_capital_global_elasticity(n)) * (natural_capital_aggregate(n,'mN'))**prodshare('nature',n) *
                                  1
                               };
-);
 tfp(t,n)$tlast(t) = sum(tt$pre(tt,t), tfp(tt,n));
 
 tolerance("Y") = 1e-3; #0.1% of variation of economy
@@ -295,10 +305,10 @@ $else.sav
   S.lo(t,n) = 0.1;
   S.up(t,n) = 0.45;
   #allow only gradual adjustment over time from starting point
-  S.lo(t,n) = s0('savings_rate', '1', n) + (S.lo('58',n) - s0('savings_rate', '1', n)) * (tperiod(t) - 1)/(smax(tt,tperiod(tt)) - 1);
-  S.up(t,n) = s0('savings_rate', '1', n) + (S.up('58',n) - s0('savings_rate', '1', n)) * (tperiod(t) - 1)/(smax(tt,tperiod(tt)) - 1);
+  ##S.lo(t,n) = s0('savings_rate', '1', n) + (S.lo('58',n) - s0('savings_rate', '1', n)) * (tperiod(t) - 1)/(smax(tt,tperiod(tt)) - 1);
+  ##S.up(t,n) = s0('savings_rate', '1', n) + (S.up('58',n) - s0('savings_rate', '1', n)) * (tperiod(t) - 1)/(smax(tt,tperiod(tt)) - 1);
 * Fix starting point
-  S.fx(tfirst,n) = s0('savings_rate', '1', n);
+  ##S.fx(tfirst,n) = s0('savings_rate', '1', n);
 $endif.sav
 
 
@@ -313,13 +323,16 @@ $elseif.ph %phase%=='eql'
     eq_ygross     # Output gross equation
     eq_yy         # Output net equation
     eq_ynet       # Output GDP net of damages equation
-
-    eq_cc         # Consumption equation
     eq_cpc        # Per capita consumption definition
-
     eq_s          # Savings rate equation
     eq_ri         # Interest rate equation
+
+$ifthen.banks not set mod_banks
+* These equations are replaced by banking module equivalents:
+*   eq_cc -> eq_household_budget, eq_kk -> eq_securities
+    eq_cc         # Consumption equation
     eq_kk         # Capital balance equation
+$endif.banks
 
 ##  EQUATIONS
 #_________________________________________________________________________
@@ -357,17 +370,20 @@ $if set mod_dac                   -    COST_CDR(t,n)
  eq_S(t,n)$(reg(n))..   I(t,n)  =E=  S(t,n) * Y(t,n)
 ;
 
-* Consumption
- eq_cc(t,n)$(reg(n))..   C(t,n)  =E=  Y(t,n) - I(t,n) 
-$if set mod_adaptation                - sum(g, I_ADA(g,t,n))
-$if set mod_natural_capital           - sum(type, NAT_INV(type,t,n))
-;
 
 * Consumption pro-capite (in thousands USD)
  eq_cpc(t,n)$(reg(n))..   CPC(t,n)  =E=  C(t,n) / pop(t,n) * 1e6 ;
 
-* Capital according to depreciation and investments
- eq_kk(t,tp1,n)$(reg(n) and pre(t,tp1))..   K(tp1,n)  =E=  (1-dk)**tstep * K(t,n) + tstep * I(t,n)   ;
+$ifthen.banks not set mod_banks
+* Consumption (replaced by eq_household_budget in banking)
+ eq_cc(t,n)$(reg(n))..   C(t,n)  =E=  Y(t,n) - I(t,n)
+$if set mod_adaptation                - sum(g, I_ADA(g,t,n))
+$if set mod_natural_capital           - sum(type, NAT_INV(type,t,n))
+;
+
+* Capital according to depreciation and investments (replaced by eq_securities in banking)
+ eq_kk(t,tp1,n)$(reg(n) and pre(t,tp1))..   K(tp1,n)  =E=  (1-dk(n))**tstep * K(t,n) + dkI(n) * I(t,n)   ;
+$endif.banks
 
 * Interest rate
  eq_ri(t,tp1,n)$(reg(n) and pre(t,tp1))..   RI(t,n)  =E=  ( (1+prstp) * (CPC(tp1,n)/CPC(t,n))**(elasmu/tstep) ) - 1  ;
@@ -383,7 +399,7 @@ $elseif.ph %phase%=='before_solve'
 
 $ifthen.sav  %savings%=='flexible'
 * Last ten periods keep saving rate constant to avoid terminal problems
-  S.fx(t,n)$(tperiod(t) gt (smax(tt,tperiod(tt)) - 10) )  = S.l('48',n);
+  S.fx(t,n)$t50ylast(t)  = S.l(t,n)$t50ylast(t);
 $endif.sav
 
 ##  AFTER SOLVE
@@ -410,10 +426,12 @@ $elseif.ph %phase%=='report'
 
 * Social Cost of Carbon
 Parameter
-    scc(t,n,ghg)           'Standard DICE Social Cost of Carbon' 
+    scc(t,n,ghg)           'Standard DICE Social Cost of Carbon'
 ;
 * Evaluate social cost of carbon per region through marginals as in DICE
+$ifthen.banks not set mod_banks
 scc(t,n,ghg)$(nsolve(n) and year(t) le 2200 and eq_cc.l(t,n) gt 0) = -1e3*sum(nn$nsolve(nn), div0(eq_e.m(t,nn,ghg) , eq_cc.m(t,nn)) );
+$endif.banks
 
 # WORLD DAMAGES ----------------------------------------
 PARAMETERS
@@ -440,16 +458,19 @@ l
 gdppc_kali
 basegrowthcap
 tfp
+k_tfp
 elasmu
 prstp
 prodshare
 dk
+dkI
 scc
 rr
 ga
 gl
 world_damfrac
 fixed_savings
+min_savings0
 labour_share
 optlr_savings
 
@@ -466,7 +487,9 @@ Y
 CTX
 
 # Equations -------------------
+$ifthen.banks not set mod_banks
 eq_cc
+$endif.banks
 
 $endif.ph
 

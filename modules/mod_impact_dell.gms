@@ -131,7 +131,7 @@ $ifthen.omg %omega_eq% == 'full'
                                                                             /  ((1 + basegrowthcap(t,n) +  DJOIMPACT(t,n)   )**tstep)
                                                                         ) - 1  ;
 * Capital-Omega factor
- eq_komega(t,n)$(reg_all(n))..  KOMEGA(t,n)  =E=  ( (((1-dk)**tstep) * K(t,n)  +  tstep * S(t,n) * tfp(t,n) * (K(t,n)**prodshare('capital',n)) * ((pop(t,n)/1000)**prodshare('labour',n)) * (1/(1+OMEGA(t,n))) ) / K(t,n) )**prodshare('capital',n)  ;
+ eq_komega(t,n)$(reg_all(n))..  KOMEGA(t,n)  =E=  ( (((1-dk(n))**tstep) * K(t,n)  +  tstep * S(t,n) * tfp(t,n) * (K(t,n)**prodshare('capital',n)) * ((pop(t,n)/1000)**prodshare('labour',n)) * (1/(1+OMEGA(t,n))) ) / K(t,n) )**prodshare('capital',n)  ;
 # OMEGA SIMPLE
 $else.omg
 * Omega-simple formulation

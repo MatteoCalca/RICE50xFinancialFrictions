@@ -25,8 +25,8 @@ $elseif.ph %phase%=='sets'
 SETS
 * Sets needed for parallelized solving procedure
     iter    'Iterations for solving'               / i1*i%maxiter% /
-    v       'Variables to check for convergence (they should be normalized, not absolute values)'   / MIU, S, Y, TATM /
-    vcheck(v)  'Variables that are actually chacked, others just reported' / MIU, S, Y, TATM /
+    v       'Variables to check for convergence (they should be normalized, not absolute values)'   / MIU, S, Y, TATM, NWRATIO /
+    vcheck(v)  'Variables that are actually checked, others just reported' / MIU, S, Y, TATM /
     clt_problem(clt) 'Coalitions that were not solved'
     irep 'Report items for solrep' / solvestat, modelstat, feas, opt /
 ;

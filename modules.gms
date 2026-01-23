@@ -35,4 +35,4 @@ $if set mod_emission_pulse $batinclude 'modules/mod_emission_pulse'            %
 $if set mod_dac $batinclude 'modules/mod_emi_stor'                             %2 # Emission storage module
 $if set mod_dac $batinclude 'modules/mod_dac'                                  %2 # Negative emissions module
 $if set mod_ocean $batinclude 'modules/mod_ocean'                              %2 # Nature Capital Blue Module
-
+$if set mod_banks $batinclude 'modules/mod_banks'                              %2 # Financial Frictions Module

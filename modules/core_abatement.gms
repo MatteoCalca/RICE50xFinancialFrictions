@@ -219,6 +219,7 @@ $elseif.ph %phase%=='declare_vars'
 
 VARIABLES
    ABATECOST(t,n,ghg)    'Cost of emissions reductions [Trill 2005 USD / year]'
+$if set mod_banks   ABATECOST_FN(t,n,ghg) 'ABATECOST without the YGROSS component'
    MAC(t,n,ghg)       'Carbon Price [ 2005 USD /tCO2 ]'
 ;
 
@@ -248,6 +249,7 @@ MIU.up(t,n,ghg)$(not tmiufix(t) and not sameas(ghg,'co2')) = maxmiu_pbl(t,n,ghg)
 $elseif.ph %phase%=='eql'
 
     eq_abatecost      # Cost of emissions reductions equation'
+$if set mod_banks    eq_abatecost_fn   # MIU function and scaling for cost of emissions reductions equation'
     eq_cprice         # Carbon price equation'
 
 
@@ -258,8 +260,15 @@ $elseif.ph %phase%=='eql'
 * Best practice : - condition your equation to be able to do a run with t_fix(t)
 $elseif.ph %phase%=='eqs'
 
-eq_abatecost(t,n,ghg)$(reg(n)).. ABATECOST(t,n,ghg)  =E=  emi_bau(t,n,ghg) * convy_ghg(ghg) *
-                    sum(coef$coefact(coef,ghg), macc_coef(t,n,ghg,coef)*power(MIU(t,n,ghg),(coefn(coef)+1))/(coefn(coef)+1)); # back to trillion dollars
+eq_abatecost(t,n,ghg)$(reg(n)).. ABATECOST(t,n,ghg)  =E=  
+$ifthen.banks not set mod_banks
+                emi_bau(t,n,ghg) * convy_ghg(ghg) * sum(coef$coefact(coef,ghg), macc_coef(t,n,ghg,coef)*power(MIU(t,n,ghg),(coefn(coef)+1))/(coefn(coef)+1)); # back to trillion dollars
+$else.banks
+                YGROSS(t,n) * ABATECOST_FN(t,n,ghg); 
+
+eq_abatecost_fn(t,n,ghg)$(reg(n)).. ABATECOST_FN(t,n,ghg)  =E= sigma(t,n,ghg) * convq_ghg(ghg) * convy_ghg(ghg) * sum(coef$coefact(coef,ghg), macc_coef(t,n,ghg,coef)*power(MIU(t,n,ghg),(coefn(coef)+1))/(coefn(coef)+1));
+
+$endif.banks
 
 eq_cprice(t,n,ghg)$(reg(n)).. MAC(t,n,ghg)  =E=  sum(coef$coefact(coef,ghg), macc_coef(t,n,ghg,coef)*power(MIU(t,n,ghg),(coefn(coef))));
 
